@@ -1,0 +1,108 @@
+{
+  "version": "1.0",
+  "lastUpdated": "2026-03-26",
+  "primaryAI": [
+    {
+      "id": "perplexity",
+      "name": "Perplexity AI",
+      "role": "router",
+      "capabilities": ["search", "reasoning", "realtime-data", "web-browsing"],
+      "endpoint": "https://api.perplexity.ai",
+      "priority": 1
+    },
+    {
+      "id": "grok",
+      "name": "Grok (xAI)",
+      "role": "router",
+      "capabilities": ["reasoning", "code-generation", "analysis", "realtime-data"],
+      "endpoint": "https://api.x.ai/v1",
+      "priority": 2
+    },
+    {
+      "id": "claude",
+      "name": "Claude (Anthropic)",
+      "role": "router",
+      "capabilities": ["reasoning", "code-generation", "analysis", "long-context"],
+      "endpoint": "https://api.anthropic.com/v1",
+      "priority": 3
+    },
+    {
+      "id": "gemini",
+      "name": "Gemini (Google)",
+      "role": "router",
+      "capabilities": ["multimodal", "reasoning", "code-generation", "vision"],
+      "endpoint": "https://generativelanguage.googleapis.com/v1",
+      "priority": 4
+    }
+  ],
+  "categories": [
+    {
+      "id": "code",
+      "name": "Code & Development",
+      "icon": "code",
+      "agents": [
+        {"name": "AutoGPT", "repo": "Significant-Gravitas/AutoGPT", "specialty": "autonomous-tasks"},
+        {"name": "OpenDevin", "repo": "OpenDevin/OpenDevin", "specialty": "software-engineering"},
+        {"name": "GPT-Engineer", "repo": "gpt-engineer-org/gpt-engineer", "specialty": "full-app-generation"},
+        {"name": "Aider", "repo": "paul-gauthier/aider", "specialty": "pair-programming"},
+        {"name": "SWE-Agent", "repo": "princeton-nlp/SWE-agent", "specialty": "bug-fixing"}
+      ]
+    },
+    {
+      "id": "data",
+      "name": "Data & Analysis",
+      "icon": "chart",
+      "agents": [
+        {"name": "Open Interpreter", "repo": "OpenInterpreter/open-interpreter", "specialty": "data-analysis"},
+        {"name": "PandasAI", "repo": "Sinaptik-AI/pandas-ai", "specialty": "dataframe-queries"},
+        {"name": "Julius AI", "repo": "julius-ai/julius", "specialty": "visualization"}
+      ]
+    },
+    {
+      "id": "web",
+      "name": "Web & Browser",
+      "icon": "globe",
+      "agents": [
+        {"name": "BrowserGPT", "repo": "anthropics/anthropic-tools", "specialty": "browser-automation"},
+        {"name": "WebArena", "repo": "web-arena-x/webarena", "specialty": "web-tasks"},
+        {"name": "Playwright Agent", "repo": "AskUI/askui", "specialty": "ui-automation"}
+      ]
+    },
+    {
+      "id": "devops",
+      "name": "DevOps & Infra",
+      "icon": "server",
+      "agents": [
+        {"name": "K8sGPT", "repo": "k8sgpt-ai/k8sgpt", "specialty": "kubernetes"},
+        {"name": "Terraform AI", "repo": "hashicorp/terraform", "specialty": "infrastructure"},
+        {"name": "Ansible Lightspeed", "repo": "ansible/ansible", "specialty": "configuration"}
+      ]
+    },
+    {
+      "id": "creative",
+      "name": "Creative & Content",
+      "icon": "palette",
+      "agents": [
+        {"name": "CrewAI", "repo": "joaomdmoura/crewAI", "specialty": "multi-agent-collab"},
+        {"name": "LangGraph", "repo": "langchain-ai/langgraph", "specialty": "workflow-orchestration"},
+        {"name": "AutoGen", "repo": "microsoft/autogen", "specialty": "conversational-agents"}
+      ]
+    },
+    {
+      "id": "security",
+      "name": "Security & Monitoring",
+      "icon": "shield",
+      "agents": [
+        {"name": "PentestGPT", "repo": "GreyDGL/PentestGPT", "specialty": "penetration-testing"},
+        {"name": "Falco", "repo": "falcosecurity/falco", "specialty": "runtime-security"},
+        {"name": "Wazuh", "repo": "wazuh/wazuh", "specialty": "threat-detection"}
+      ]
+    }
+  ],
+  "taskQueue": {
+    "maxConcurrent": 5,
+    "retryAttempts": 3,
+    "timeout": 120,
+    "rotationStrategy": "round-robin"
+  }
+}
