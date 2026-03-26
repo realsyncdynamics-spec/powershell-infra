@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RealSyncDynamics - Infra Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:#0d1117;color:#c9d1d9;min-height:100vh}
+.header{background:linear-gradient(135deg,#1a1b2e,#16213e);padding:20px 30px;border-bottom:1px solid #30363d;display:flex;align-items:center;gap:15px}
+.header h1{font-size:1.4em;color:#58a6ff}
+.header .status{margin-left:auto;padding:6px 14px;border-radius:20px;font-size:0.85em}
+.status.online{background:#0d419d;color:#58a6ff}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;padding:20px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:20px;transition:all 0.3s}
+.card:hover{border-color:#58a6ff;transform:translateY(-2px)}
+.card h3{color:#58a6ff;margin-bottom:10px;font-size:1.1em}
+.card p{color:#8b949e;font-size:0.9em;margin-bottom:15px}
+.btn{display:inline-block;padding:8px 16px;border-radius:6px;text-decoration:none;font-size:0.85em;font-weight:600;cursor:pointer;border:none;margin:3px}
+.btn-primary{background:#238636;color:#fff}
+.btn-secondary{background:#21262d;color:#c9d1d9;border:1px solid #30363d}
+.btn:hover{opacity:0.85}
+.quick-actions{background:#161b22;border:1px solid #30363d;border-radius:10px;margin:20px;padding:20px}
+.quick-actions h2{color:#58a6ff;margin-bottom:15px}
+.cmd-box{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:12px;margin:8px 0;font-family:'Cascadia Code',monospace;font-size:0.85em;color:#7ee787;cursor:pointer;position:relative}
+.cmd-box:hover{border-color:#58a6ff}
+.cmd-box::after{content:'Kopieren';position:absolute;right:10px;top:50%;transform:translateY(-50%);color:#8b949e;font-size:0.75em}
+.footer{text-align:center;padding:20px;color:#484f58;font-size:0.8em}
+</style>
+</head>
+<body>
+<div class="header">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="#58a6ff"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+<h1>RealSyncDynamics Infra Dashboard</h1>
+<span class="status online" id="statusBadge">System Aktiv</span>
+</div>
+
+<div class="grid">
+<div class="card">
+<h3>Desktop Automation</h3>
+<p>Maus, Tastatur, Fenster-Steuerung und App-Management</p>
+<button class="btn btn-primary" onclick="copyCmd('powershell -ExecutionPolicy Bypass -File C:\\Infra\\Scripts\\DesktopAutomation.ps1')">Script starten</button>
+<button class="btn btn-secondary" onclick="window.open('https://github.com/realsyncdynamics-spec/powershell-infra/blob/main/Scripts/DesktopAutomation.ps1')">Code ansehen</button>
+</div>
+
+<div class="card">
+<h3>Browser Automation</h3>
+<p>Selenium WebDriver, Tab-Steuerung, Web-Scraping</p>
+<button class="btn btn-primary" onclick="copyCmd('powershell -ExecutionPolicy Bypass -File C:\\Infra\\Scripts\\BrowserAutomation.ps1')">Script starten</button>
+<button class="btn btn-secondary" onclick="window.open('https://github.com/realsyncdynamics-spec/powershell-infra/blob/main/Scripts/BrowserAutomation.ps1')">Code ansehen</button>
+</div>
+
+<div class="card">
+<h3>App Control</h3>
+<p>Anwendungen starten, stoppen, ueberwachen</p>
+<button class="btn btn-primary" onclick="copyCmd('powershell -ExecutionPolicy Bypass -File C:\\Infra\\Scripts\\AppControl.ps1')">Script starten</button>
+<button class="btn btn-secondary" onclick="window.open('https://github.com/realsyncdynamics-spec/powershell-infra/blob/main/Scripts/AppControl.ps1')">Code ansehen</button>
+</div>
+
+<div class="card">
+<h3>File System Watcher</h3>
+<p>Ordner ueberwachen, automatische Aktionen bei Aenderungen</p>
+<button class="btn btn-primary" onclick="copyCmd('powershell -ExecutionPolicy Bypass -File C:\\Infra\\Scripts\\FileSystemWatcher.ps1')">Script starten</button>
+<button class="btn btn-secondary" onclick="window.open('https://github.com/realsyncdynamics-spec/powershell-infra/blob/main/Scripts/FileSystemWatcher.ps1')">Code ansehen</button>
+</div>
+
+<div class="card">
+<h3>System Monitor</h3>
+<p>CPU, RAM, Disk-Auslastung in Echtzeit</p>
+<button class="btn btn-primary" onclick="copyCmd('powershell -ExecutionPolicy Bypass -File C:\\Infra\\Scripts\\SystemMonitor.ps1')">Script starten</button>
+<button class="btn btn-secondary" onclick="window.open('https://github.com/realsyncdynamics-spec/powershell-infra/blob/main/Scripts/SystemMonitor.ps1')">Code ansehen</button>
+</div>
+
+<div class="card">
+<h3>AutoPilot</h3>
+<p>Alle Module gleichzeitig starten und steuern</p>
+<button class="btn btn-primary" onclick="copyCmd('powershell -ExecutionPolicy Bypass -File C:\\Infra\\Scripts\\AutoPilot.ps1')">Script starten</button>
+<button class="btn btn-secondary" onclick="window.open('https://github.com/realsyncdynamics-spec/powershell-infra/blob/main/Scripts/AutoPilot.ps1')">Code ansehen</button>
+</div>
+</div>
+
+<div class="quick-actions">
+<h2>Quick Commands</h2>
+<div class="cmd-box" onclick="copyCmd(this.innerText.split('Kopieren')[0].trim())">cd C:\Infra && powershell -ExecutionPolicy Bypass -File Setup.ps1</div>
+<div class="cmd-box" onclick="copyCmd(this.innerText.split('Kopieren')[0].trim())">cd C:\Infra\Scripts && powershell -ExecutionPolicy Bypass -File AutoPilot.ps1</div>
+<div class="cmd-box" onclick="copyCmd(this.innerText.split('Kopieren')[0].trim())">Get-Process | Sort-Object CPU -Descending | Select -First 10</div>
+</div>
+
+<div class="footer">RealSyncDynamics Infra Dashboard v1.0 | PowerShell Automation Toolkit</div>
+
+<script>
+function copyCmd(cmd){navigator.clipboard.writeText(cmd).then(()=>{const n=document.createElement('div');n.textContent='Kopiert!';n.style.cssText='position:fixed;top:20px;right:20px;background:#238636;color:#fff;padding:10px 20px;border-radius:8px;z-index:9999;font-size:0.9em';document.body.appendChild(n);setTimeout(()=>n.remove(),1500)})}
+setInterval(()=>{document.getElementById('statusBadge').textContent=navigator.onLine?'System Aktiv':'Offline';document.getElementById('statusBadge').className=navigator.onLine?'status online':'status';},5000)
+</script>
+</body>
+</html>
