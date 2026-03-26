@@ -1,78 +1,61 @@
 # powershell-infra
 
-PowerShell Server-Automatisierung: Remoting, Desktop-Steuerung, Browser-Automation, DSC
+Full PC Automation Toolkit: Desktop, Browser, Server, Apps, Monitoring, Scheduling.
 
 ## Quickstart
 
 ```powershell
-# Bootstrap - clont das Repo nach C:\Infra
 irm https://raw.githubusercontent.com/realsyncdynamics-spec/powershell-infra/main/Deploy-Infra.ps1 | iex
-```
-
-## Struktur
-
-```
-powershell-infra/
-|-- Config/
-|   +-- servers.json
-|-- DSC/
-|   |-- ServerBaseline.ps1
-|   |-- Test-ServerBaseline.ps1
-|   +-- Apply-ServerBaseline.ps1
-|-- Scripts/
-|   |-- ServerAdmin.ps1
-|   |-- RemoteDesktop.ps1
-|   |-- BrowserAutomation.ps1
-|   +-- backup.ps1
-|-- Deploy-Infra.ps1
-+-- README.md
 ```
 
 ## Scripts
 
-### ServerAdmin.ps1
-Remoting, Service-Checks, Backup-Task Registration.
+| Script | Funktion |
+|---|---|
+| `DesktopAutomation.ps1` | Maus, Tastatur, Fenster, Screenshots, Clipboard (Win32 API) |
+| `AppControl.ps1` | Apps starten/stoppen/installieren, Winget, Startup-Management |
+| `BrowserAutomation.ps1` | Selenium + Playwright Setup und Browser-Steuerung |
+| `FileSystemWatcher.ps1` | Ordner ueberwachen, auto-copy/move/execute |
+| `SystemMonitor.ps1` | CPU, RAM, Disk, Netzwerk - Echtzeit + Alerts (Toast/Email) |
+| `ScheduledAutomation.ps1` | Tasks registrieren, Workflows erstellen, orchestrieren |
+| `ServerAdmin.ps1` | Remoting, Service-Checks, Backup-Tasks |
+| `RemoteDesktop.ps1` | RDP, OpenSSH, WinRM, NLA Konfiguration |
+| `backup.ps1` | Zip-Backup mit Retention |
+
+## Beispiele
+
 ```powershell
-.\Scripts\ServerAdmin.ps1 -ComputerName SRV01,SRV02 -EnableRemoting
-.\Scripts\ServerAdmin.ps1 -ComputerName SRV01 -CheckSpooler
-.\Scripts\ServerAdmin.ps1 -ComputerName SRV01 -RegisterBackupTask
+# Desktop steuern
+. .\Scripts\DesktopAutomation.ps1
+Click-Mouse -X 500 -Y 300
+Send-Keys "Hello"
+Get-AllWindows | Format-Table
+Focus-Window -Title "Notepad"
+Take-Screenshot
+
+# Apps verwalten
+.\Scripts\AppControl.ps1 -Action List
+.\Scripts\AppControl.ps1 -Action Start -AppPath "notepad.exe"
+.\Scripts\AppControl.ps1 -Action Stop -AppName "notepad"
+
+# Ordner ueberwachen
+.\Scripts\FileSystemWatcher.ps1 -WatchPath C:\Downloads -CopyToPath D:\Backup
+
+# System monitoren
+.\Scripts\SystemMonitor.ps1 -IntervalSec 5 -CpuThreshold 80 -Toast -LogToFile
+
+# Workflow erstellen und schedulen
+.\Scripts\ScheduledAutomation.ps1 -Action CreateWorkflow -TaskName "NightJob" -WorkflowScripts @("C:\Infra\Scripts\backup.ps1","C:\Infra\Scripts\SystemMonitor.ps1")
+.\Scripts\ScheduledAutomation.ps1 -Action Register -TaskName "NightJob" -ScriptPath "C:\Infra\Workflows\NightJob.ps1" -TriggerType Daily -TriggerTime 3am
 ```
 
-### RemoteDesktop.ps1
-RDP, OpenSSH, WinRM, NLA Konfiguration.
-```powershell
-.\Scripts\RemoteDesktop.ps1 -ComputerName SRV01 -EnableRDP -EnableSSH
-.\Scripts\RemoteDesktop.ps1 -ComputerName SRV01 -EnableWinRM
-```
-
-### BrowserAutomation.ps1
-Selenium WebDriver + Playwright Setup und Beispiele.
-```powershell
-.\Scripts\BrowserAutomation.ps1 -InstallSelenium
-.\Scripts\BrowserAutomation.ps1 -RunExample
-```
-
-### backup.ps1
-Zip-Backup mit automatischer Retention.
-```powershell
-.\Scripts\backup.ps1 -Source C:\Data -Destination D:\Backups -RetainDays 30
-```
-
-## DSC (Desired State Configuration)
+## DSC
 
 ```powershell
-# MOFs generieren
 cd DSC
 .\ServerBaseline.ps1 -NodeName SRV01,SRV02
-
-# Testen (WhatIf)
-.\Test-ServerBaseline.ps1 -NodeName SRV01
-
-# Anwenden
 .\Apply-ServerBaseline.ps1 -NodeName SRV01
 ```
-
-Enthaltene Ressourcen: IIS, RDP, NLA, WinRM, Registry (RealSyncDynamics Environment Tag).
 
 ## Lizenz
 
