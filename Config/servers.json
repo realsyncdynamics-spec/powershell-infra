@@ -1,0 +1,12 @@
+{
+  "servers": [
+    {"name": "SRV01", "role": "WebServer", "ip": "192.168.1.10"},
+    {"name": "SRV02", "role": "AppServer", "ip": "192.168.1.11"},
+    {"name": "SRV03", "role": "DBServer", "ip": "192.168.1.12"}
+  ],
+  "backup": {
+    "source": "C:\\Data",
+    "destination": "D:\\Backups",
+    "retainDays": 30
+  }
+}
