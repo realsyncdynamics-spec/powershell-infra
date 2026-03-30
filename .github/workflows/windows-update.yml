@@ -1,0 +1,140 @@
+name: Windows Update - Automated Patching
+
+on:
+  # Wöchentlich: Dienstag 01:00 UTC (Gruppe A), Mittwoch 02:00 UTC (Gruppe B), Donnerstag 01:00 UTC (Gruppe C)
+  schedule:
+    - cron: '0 1 * * 2'   # Gruppe A  - Dienstag 02:00 CEST
+    - cron: '0 2 * * 3'   # Gruppe B  - Mittwoch 03:00 CEST
+    - cron: '0 1 * * 4'   # Gruppe C  - Donnerstag 02:00 CEST
+  # Manuell ausloesbar mit Parametern
+  workflow_dispatch:
+    inputs:
+      servers:
+        description: 'Kommagetrennte Serverliste (leer = aus servers.json)'
+        required: false
+        default: ''
+      security_only:
+        description: 'Nur Security-Updates installieren'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      no_reboot:
+        description: 'Kein automatischer Reboot'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      whatif:
+        description: 'WhatIf-Trockenlauf (keine echten Aenderungen)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+env:
+  INFRA_ROOT: C:\Infra
+  SCRIPT_PATH: C:\Infra\Scripts\WindowsUpdate.ps1
+  LOG_DIR: C:\Infra\Logs
+
+jobs:
+  patch-servers:
+    name: Patch Windows Servers
+    runs-on: [self-hosted, windows, infra]
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          path: ${{ env.INFRA_ROOT }}
+
+      - name: Verify PSRemoting and PSWindowsUpdate
+        shell: pwsh
+        run: |
+          Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)" -ForegroundColor Cyan
+          $config = Get-Content "$env:INFRA_ROOT\Config\servers.json" -Raw | ConvertFrom-Json
+          $servers = $config.servers | Where-Object { $_.role -ne 'excluded' } | Select-Object -ExpandProperty name
+          Write-Host "Zielserver: $($servers -join ', ')" -ForegroundColor Cyan
+          foreach ($srv in $servers) {
+            $ping = Test-Connection -ComputerName $srv -Count 1 -Quiet -ErrorAction SilentlyContinue
+            $status = if ($ping) { "ONLINE" } else { "OFFLINE" }
+            $color  = if ($ping) { "Green" }  else { "Red" }
+            Write-Host "  $srv : $status" -ForegroundColor $color
+          }
+
+      - name: Run WindowsUpdate.ps1
+        shell: pwsh
+        run: |
+          $params = @{
+            RebootDelay   = 180
+            RebootTimeout = 600
+          }
+
+          # Optionale Parameter aus workflow_dispatch
+          if ('${{ github.event.inputs.servers }}' -ne '') {
+            $params['Servers'] = '${{ github.event.inputs.servers }}'.Split(',').Trim()
+          }
+          if ('${{ github.event.inputs.security_only }}' -eq 'true') {
+            $params['SecurityOnly'] = $true
+          }
+          if ('${{ github.event.inputs.no_reboot }}' -eq 'true') {
+            $params['NoReboot'] = $true
+          }
+
+          $whatif = '${{ github.event.inputs.whatif }}' -eq 'true'
+
+          Write-Host "Starte WindowsUpdate.ps1 mit Parametern: $($params | ConvertTo-Json -Compress)" -ForegroundColor Cyan
+
+          if ($whatif) {
+            & "$env:INFRA_ROOT\Scripts\WindowsUpdate.ps1" @params -WhatIf
+          } else {
+            & "$env:INFRA_ROOT\Scripts\WindowsUpdate.ps1" @params
+          }
+
+      - name: Upload Log-Dateien
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: patch-logs-${{ github.run_number }}
+          path: ${{ env.LOG_DIR }}\WindowsUpdate_*.log
+          retention-days: 90
+
+      - name: Cert-Check nach Patching
+        shell: pwsh
+        run: |
+          Write-Host "Starte Zertifikats-Check nach Patching..." -ForegroundColor Cyan
+          & "$env:INFRA_ROOT\Scripts\CertRenewal.ps1" -Mode Check -WarnDays 30
+
+      - name: Upload Cert-Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cert-report-${{ github.run_number }}
+          path: ${{ env.LOG_DIR }}\CertReport_*.csv
+          retention-days: 90
+
+      - name: Zusammenfassung
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "========================================" -ForegroundColor Green
+          Write-Host " Patch-Run ${{ github.run_number }} abgeschlossen" -ForegroundColor Green
+          Write-Host " Trigger: ${{ github.event_name }}" -ForegroundColor Green
+          Write-Host " Zeit: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Green
+          Write-Host "========================================" -ForegroundColor Green
+          $logs = Get-ChildItem "$env:LOG_DIR\WindowsUpdate_*.log" -ErrorAction SilentlyContinue
+          if ($logs) {
+            Write-Host "Log-Dateien:" -ForegroundColor Cyan
+            $logs | ForEach-Object { Write-Host "  $($_.FullName)" }
+            # Letzte 50 Zeilen des neuesten Logs ausgeben
+            $latest = $logs | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            Write-Host "`nLetzte 50 Zeilen aus $($latest.Name):" -ForegroundColor Cyan
+            Get-Content $latest.FullName -Tail 50
+          }
