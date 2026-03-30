@@ -1,0 +1,273 @@
+# =============================================================================
+# weekly-patching.yml
+# Woechentlicher Windows-Patch-Run via GitHub Actions + Self-Hosted Runner
+#
+# Ablauf:
+#   Di 02:00 UTC  -> PatchGroup A (SRV01 WebServer, SRV02 AppServer)
+#   Mi 03:00 UTC  -> PatchGroup B (SRV03 DBServer, SRV04 DomainController)
+#   Do 02:00 UTC  -> PatchGroup C (SRV05 FileServer, SRV06 MonitoringServer)
+#
+# Voraussetzungen:
+#   - Self-Hosted Runner auf einem Admin-Server in corp.local (Label: windows-infra)
+#   - PSRemoting auf allen Zielservern aktiv
+#   - PSWindowsUpdate auf Zielservern installiert
+#   - GitHub Secret PATCH_CRED_JSON mit JSON: {"user":"DOMAIN\\svc_patch","pass":"..."}
+# =============================================================================
+
+name: Weekly Server Patching
+
+on:
+  # Gruppe A - Dienstag 02:00 UTC
+  schedule:
+    - cron: '0 2 * * 2'   # Dienstag  02:00 UTC -> Gruppe A
+    - cron: '0 3 * * 3'   # Mittwoch  03:00 UTC -> Gruppe B
+    - cron: '0 2 * * 4'   # Donnerstag 02:00 UTC -> Gruppe C
+
+  # Manueller Trigger fuer einzelne Gruppe oder alle
+  workflow_dispatch:
+    inputs:
+      patch_group:
+        description: 'PatchGroup (A | B | C | ALL)'
+        required: true
+        default: 'ALL'
+        type: choice
+        options: [A, B, C, ALL]
+      security_only:
+        description: 'Nur Security-Updates'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['true', 'false']
+      no_reboot:
+        description: 'Kein automatischer Reboot'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['true', 'false']
+      dry_run:
+        description: 'Trockenlauf (WhatIf)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['true', 'false']
+
+env:
+  INFRA_ROOT: 'C:\Infra'
+  CONFIG_PATH: 'C:\Infra\Config\servers.json'
+  LOG_DIR: 'C:\Infra\Logs'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Bestimme welche PatchGroup aktiv ist (Schedule vs. manuell)
+  # ---------------------------------------------------------------------------
+  resolve-group:
+    name: Resolve PatchGroup
+    runs-on: windows-infra
+    outputs:
+      group: ${{ steps.resolve.outputs.group }}
+    steps:
+      - name: Determine active PatchGroup
+        id: resolve
+        shell: pwsh
+        run: |
+          $day = (Get-Date).DayOfWeek.ToString()
+          $hour = (Get-Date).Hour
+
+          # Manueller Trigger
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            $group = '${{ github.event.inputs.patch_group }}'
+            Write-Host "Manual trigger: PatchGroup=$group"
+          } else {
+            # Scheduled: Tag bestimmt Gruppe
+            $group = switch ($day) {
+              'Tuesday'   { 'A' }
+              'Wednesday' { 'B' }
+              'Thursday'  { 'C' }
+              default     { 'NONE' }
+            }
+            Write-Host "Scheduled trigger: Day=$day PatchGroup=$group"
+          }
+          echo "group=$group" >> $env:GITHUB_OUTPUT
+
+  # ---------------------------------------------------------------------------
+  # PatchGroup A - Di 02:00 - Frontend + App (SRV01, SRV02)
+  # ---------------------------------------------------------------------------
+  patch-group-a:
+    name: "PatchGroup A - WebServer + AppServer"
+    needs: resolve-group
+    if: needs.resolve-group.outputs.group == 'A' || needs.resolve-group.outputs.group == 'ALL'
+    runs-on: windows-infra
+    timeout-minutes: 120
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Copy scripts to Infra root
+        shell: pwsh
+        run: |
+          Copy-Item -Path "$env:GITHUB_WORKSPACE\Scripts\*" `
+                    -Destination "$env:INFRA_ROOT\Scripts\" `
+                    -Recurse -Force
+
+      - name: Run WindowsUpdate - Group A
+        shell: pwsh
+        env:
+          PATCH_CRED_JSON: ${{ secrets.PATCH_CRED_JSON }}
+        run: |
+          $cred_data = $env:PATCH_CRED_JSON | ConvertFrom-Json
+          $secPw     = ConvertTo-SecureString $cred_data.pass -AsPlainText -Force
+          $cred      = New-Object System.Management.Automation.PSCredential($cred_data.user, $secPw)
+
+          $params = @{
+            Servers      = @('SRV01','SRV02')
+            RebootDelay  = 120
+            Credential   = $cred
+          }
+          if ('${{ github.event.inputs.security_only }}' -eq 'true') { $params['SecurityOnly'] = $true }
+          if ('${{ github.event.inputs.no_reboot }}'    -eq 'true') { $params['NoReboot']     = $true }
+          if ('${{ github.event.inputs.dry_run }}'      -eq 'true') { $params['WhatIf']       = $true }
+
+          $results = & "$env:INFRA_ROOT\Scripts\WindowsUpdate.ps1" @params
+          $failed  = $results | Where-Object { $_.Status -eq 'FEHLER' }
+          if ($failed) { throw "Patching fehlgeschlagen auf: $($failed.Server -join ', ')" }
+
+      - name: Upload Patch Log - Group A
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: patch-log-group-a-${{ github.run_number }}
+          path: C:\Infra\Logs\WindowsUpdate_*.log
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # PatchGroup B - Mi 03:00 - DB + DC (SRV03, SRV04) - erweiterter RebootDelay
+  # ---------------------------------------------------------------------------
+  patch-group-b:
+    name: "PatchGroup B - DBServer + DomainController"
+    needs: [resolve-group, patch-group-a]
+    if: |
+      always() &&
+      (needs.resolve-group.outputs.group == 'B' || needs.resolve-group.outputs.group == 'ALL') &&
+      (needs.patch-group-a.result == 'success' || needs.patch-group-a.result == 'skipped')
+    runs-on: windows-infra
+    timeout-minutes: 180
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Copy scripts to Infra root
+        shell: pwsh
+        run: |
+          Copy-Item -Path "$env:GITHUB_WORKSPACE\Scripts\*" `
+                    -Destination "$env:INFRA_ROOT\Scripts\" `
+                    -Recurse -Force
+
+      - name: Run WindowsUpdate - Group B
+        shell: pwsh
+        env:
+          PATCH_CRED_JSON: ${{ secrets.PATCH_CRED_JSON }}
+        run: |
+          $cred_data = $env:PATCH_CRED_JSON | ConvertFrom-Json
+          $secPw     = ConvertTo-SecureString $cred_data.pass -AsPlainText -Force
+          $cred      = New-Object System.Management.Automation.PSCredential($cred_data.user, $secPw)
+
+          $params = @{
+            Servers      = @('SRV03','SRV04')
+            RebootDelay  = 300   # DC: laengere Wartezeit nach Reboot
+            Credential   = $cred
+          }
+          if ('${{ github.event.inputs.security_only }}' -eq 'true') { $params['SecurityOnly'] = $true }
+          if ('${{ github.event.inputs.no_reboot }}'    -eq 'true') { $params['NoReboot']     = $true }
+          if ('${{ github.event.inputs.dry_run }}'      -eq 'true') { $params['WhatIf']       = $true }
+
+          $results = & "$env:INFRA_ROOT\Scripts\WindowsUpdate.ps1" @params
+          $failed  = $results | Where-Object { $_.Status -eq 'FEHLER' }
+          if ($failed) { throw "Patching fehlgeschlagen auf: $($failed.Server -join ', ')" }
+
+      - name: Upload Patch Log - Group B
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: patch-log-group-b-${{ github.run_number }}
+          path: C:\Infra\Logs\WindowsUpdate_*.log
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # PatchGroup C - Do 02:00 - File + Monitoring (SRV05, SRV06)
+  # ---------------------------------------------------------------------------
+  patch-group-c:
+    name: "PatchGroup C - FileServer + MonitoringServer"
+    needs: [resolve-group, patch-group-b]
+    if: |
+      always() &&
+      (needs.resolve-group.outputs.group == 'C' || needs.resolve-group.outputs.group == 'ALL') &&
+      (needs.patch-group-b.result == 'success' || needs.patch-group-b.result == 'skipped')
+    runs-on: windows-infra
+    timeout-minutes: 120
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Copy scripts to Infra root
+        shell: pwsh
+        run: |
+          Copy-Item -Path "$env:GITHUB_WORKSPACE\Scripts\*" `
+                    -Destination "$env:INFRA_ROOT\Scripts\" `
+                    -Recurse -Force
+
+      - name: Run WindowsUpdate - Group C
+        shell: pwsh
+        env:
+          PATCH_CRED_JSON: ${{ secrets.PATCH_CRED_JSON }}
+        run: |
+          $cred_data = $env:PATCH_CRED_JSON | ConvertFrom-Json
+          $secPw     = ConvertTo-SecureString $cred_data.pass -AsPlainText -Force
+          $cred      = New-Object System.Management.Automation.PSCredential($cred_data.user, $secPw)
+
+          $params = @{
+            Servers      = @('SRV05','SRV06')
+            RebootDelay  = 180
+            Credential   = $cred
+          }
+          if ('${{ github.event.inputs.security_only }}' -eq 'true') { $params['SecurityOnly'] = $true }
+          if ('${{ github.event.inputs.no_reboot }}'    -eq 'true') { $params['NoReboot']     = $true }
+          if ('${{ github.event.inputs.dry_run }}'      -eq 'true') { $params['WhatIf']       = $true }
+
+          $results = & "$env:INFRA_ROOT\Scripts\WindowsUpdate.ps1" @params
+          $failed  = $results | Where-Object { $_.Status -eq 'FEHLER' }
+          if ($failed) { throw "Patching fehlgeschlagen auf: $($failed.Server -join ', ')" }
+
+      - name: Upload Patch Log - Group C
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: patch-log-group-c-${{ github.run_number }}
+          path: C:\Infra\Logs\WindowsUpdate_*.log
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # Zusammenfassung - Slack/Teams-Notification (optional)
+  # ---------------------------------------------------------------------------
+  notify:
+    name: Notify on completion
+    needs: [patch-group-a, patch-group-b, patch-group-c]
+    if: always()
+    runs-on: windows-infra
+    steps:
+      - name: Build summary
+        shell: pwsh
+        run: |
+          $a = '${{ needs.patch-group-a.result }}'
+          $b = '${{ needs.patch-group-b.result }}'
+          $c = '${{ needs.patch-group-c.result }}'
+          $summary = @"
+          Weekly Patching Run #${{ github.run_number }} abgeschlossen
+          -----------------------------------------------
+          PatchGroup A (SRV01, SRV02): $a
+          PatchGroup B (SRV03, SRV04): $b
+          PatchGroup C (SRV05, SRV06): $c
+          Logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          "@
+          Write-Host $summary
+          # Hier optional: Invoke-RestMethod -Uri $env:TEAMS_WEBHOOK -Method Post -Body ...
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "``````$summary``````"
