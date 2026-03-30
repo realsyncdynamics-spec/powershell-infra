@@ -1,12 +1,99 @@
 {
+  "version": "2.0",
+  "lastUpdated": "2026-03-30",
+  "domain": "corp.local",
   "servers": [
-    {"name": "SRV01", "role": "WebServer", "ip": "192.168.1.10"},
-    {"name": "SRV02", "role": "AppServer", "ip": "192.168.1.11"},
-    {"name": "SRV03", "role": "DBServer", "ip": "192.168.1.12"}
+    {
+      "name": "SRV01",
+      "role": "WebServer",
+      "ip": "192.168.1.10",
+      "os": "Windows Server 2022",
+      "tags": ["iis", "frontend", "production"],
+      "patchGroup": "A",
+      "warnDays": 30
+    },
+    {
+      "name": "SRV02",
+      "role": "AppServer",
+      "ip": "192.168.1.11",
+      "os": "Windows Server 2022",
+      "tags": ["dotnet", "api", "production"],
+      "patchGroup": "A",
+      "warnDays": 30
+    },
+    {
+      "name": "SRV03",
+      "role": "DBServer",
+      "ip": "192.168.1.12",
+      "os": "Windows Server 2022",
+      "tags": ["mssql", "database", "production"],
+      "patchGroup": "B",
+      "warnDays": 30
+    },
+    {
+      "name": "SRV04",
+      "role": "DomainController",
+      "ip": "192.168.1.5",
+      "os": "Windows Server 2022",
+      "tags": ["ad", "dns", "dhcp", "critical"],
+      "patchGroup": "B",
+      "warnDays": 14
+    },
+    {
+      "name": "SRV05",
+      "role": "FileServer",
+      "ip": "192.168.1.20",
+      "os": "Windows Server 2019",
+      "tags": ["smb", "dfs", "homes"],
+      "patchGroup": "C",
+      "warnDays": 30
+    },
+    {
+      "name": "SRV06",
+      "role": "MonitoringServer",
+      "ip": "192.168.1.30",
+      "os": "Windows Server 2022",
+      "tags": ["monitoring", "wazuh", "grafana"],
+      "patchGroup": "C",
+      "warnDays": 30
+    },
+    {
+      "name": "SRV-STAGING",
+      "role": "excluded",
+      "ip": "192.168.2.10",
+      "os": "Windows Server 2022",
+      "tags": ["staging", "test"],
+      "patchGroup": "none",
+      "warnDays": 90
+    }
   ],
+  "patchGroups": {
+    "A": { "description": "Frontend + App - Patchday: Dienstag 02:00", "rebootDelay": 120 },
+    "B": { "description": "DB + DC - Patchday: Mittwoch 03:00", "rebootDelay": 300 },
+    "C": { "description": "File + Monitoring - Patchday: Donnerstag 02:00", "rebootDelay": 180 }
+  },
   "backup": {
     "source": "C:\\Data",
     "destination": "D:\\Backups",
-    "retainDays": 30
+    "retainDays": 30,
+    "schedule": "02:00",
+    "compress": true
+  },
+  "certRenewal": {
+    "warnDays": 30,
+    "renewalTool": "winacme",
+    "wacsPath": "C:\\Infra\\Tools\\wacs.exe"
+  },
+  "userProvisioning": {
+    "defaultOU": "OU=Users,DC=corp,DC=local",
+    "disabledOU": "OU=Disabled,DC=corp,DC=local",
+    "homeFolderRoot": "\\\\SRV05\\homes",
+    "homeDrive": "H:",
+    "defaultGroups": ["GRP_VPN", "GRP_SharePoint"]
+  },
+  "remoting": {
+    "protocol": "WinRM",
+    "port": 5985,
+    "authMethod": "Kerberos"
   }
 }
